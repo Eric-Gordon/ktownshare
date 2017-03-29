@@ -51,10 +51,25 @@ if(isset($_SESSION['Member_id'])){
 <?php
 if(isset($_POST['reserve'])){
 	$vinnum = $_POST['reserve'];
-	header("Location: reserve.php?vin=$vinnum");
+	if(isset($_POST['res-date'])){
+		$resDate = $_POST['res-date'];
+		$_SESSION['Member_id'] = $vinnum . "^" . $resDate;
+		header("Location: reserve.php");
+		die();
+	}else{
+		$_SESSION['Member_id'] = $vinnum;
+		header("Location: reserve.php");
+		die();
+	}
+}
+?>	
+
+<?php
+if(isset($_POST['menu-back'])){
+	header("Location: profile.php");
 	die();
 }
-?>
+?>	
 
  Welcome  <?php echo $myrow['Name']; ?>, <a href="index.php?logout=1"> Log Out</a><br/>
 <!-- dynamic content will be here -->
@@ -102,50 +117,141 @@ if(isset($_POST['reserve'])){
 	<?php 
 	// View available cars
 	if(isset($_POST['carsavailable'])){
-		// include database connection
-		include_once 'config/connection.php'; 
-		//select locations
-		$query = "SELECT * FROM cars WHERE isAvailable=1";
-		//prepare statement
-		if($stmt = $con->prepare($query)){
-			// Execute the query
-			$stmt->execute();
-			//resultset
-			$result = $stmt->get_result();
-			//put results into an array
-			while($row = $result->fetch_array()){
-				$rows[] = $row;
-			}
-			?>
-		<div  id='carsavailable-menu'>
+		?>
+		<div  id='carsavailable-menu1'>
 			<table>
-				<?php foreach($rows as $row){ 
-				$vin = $row['VIN'];
-				$make = $row['Make'];
-				$model = $row['Model'];
-				$year = $row['Year'];
-				$fee =  $row['Rent_fee'];
-				$odom = $row['Odometer'];
-				?>
 				<tr>
-					<td>Make: <?php echo $make;?>, Model: <?php echo $model;?>, Year: <?php echo $year;?>, Odometer: <?php echo $odom;?>, Rental Fee: <?php echo $fee; ?></td>
-					<td><button type='submit' name='reserve' id='reserve' value='<?php echo $vin; ?>' > Reserve </button></td>
+					<td>Select Date: </td>
+					<td><input type='date' name='calendar1' id='calendar1' min='<?php echo date("Y/m/d"); ?>'/></td>
 				</tr>
-				<?php } ?>
 				<tr>
 					<td><input type='submit' name='menu-back' id='menu-back' value='Back' /></td>
+				</tr>				
+				<tr>
+					<td><input type='hidden' name='check-date' id='check-date' value='' /></td>
 				</tr>
-				
+				<script>
+						var calendar = document.getElementById('calendar1');
+						calendar.valueAsDate = new Date();
+						var dateCheck = document.getElementById('check-date');
+						calendar.addEventListener(
+							 'change',
+							 function() { dateCheck.value = calendar.value;
+							document.forms['Profile'].submit(); },
+							 false
+						  );
+				</script>
 			</table>
-		</div>
+		</div>		
 			<?php
 				echo "
 				<style>
 				#profile-menu {
 					display: none;
 				}
-				#carsavailable-menu {
+				#carsavailable-menu1 {
 					display: block;
+				}
+				</style>";
+	}
+	?>
+	
+	<?php
+	if(isset($_POST['check-date'])){
+		$date = $_POST['check-date'];		
+		// include database connection
+		include_once 'config/connection.php'; 
+		//select locations
+		$query = "SELECT * FROM cars WHERE VIN NOT IN (SELECT VIN FROM reservations WHERE reservations.Date=?)";
+		//prepare statement
+		if($stmt = $con->prepare($query)){
+			$stmt->bind_Param("s", $date);
+			// Execute the query
+			$stmt->execute();
+			//resultset
+			$result = $stmt->get_result();
+			
+			$num = $result->num_rows;
+		
+			?>
+			<div  id='carsavailable-menu2'>
+				<table>
+					<tr>
+						<td>Select Date: </td>
+						<td><input type='date' name='calendar2' id='calendar2' min='<?php echo date("Y/m/d"); ?>'/></td>
+					</tr>	
+					<tr>
+						<td><input type='hidden' name='check-date' id='check-date' value='' /></td>
+					</tr>
+					<script>
+						var calendar = document.getElementById('calendar2');
+						var time = <?php echo json_encode ( $date ) ?>;
+						calendar.value = time;
+						var dateCheck = document.getElementById('check-date');
+						calendar.addEventListener(
+							 'change',
+							 function() { dateCheck.value = calendar.value;
+							document.forms['Profile'].submit(); },
+							 false
+						  );
+					</script>
+					<?php 
+					if($num>0){?>
+					<tr>
+						<td>Make: </td>
+						<td>Model: </td>
+						<td>Year: </td>
+						<td>Odometer: </td>
+						<td>Rental Fee: </td>
+					</tr>
+					<?php
+						//put results into an array
+						while($row = $result->fetch_array()){
+							$rows[] = $row;
+						}
+					foreach($rows as $row){
+							$vin = $row['VIN'];
+							$make = $row['Make'];
+							$model = $row['Model'];
+							$year = $row['Year'];
+							$fee =  $row['Rent_fee'];
+							$odom = $row['Odometer'];
+					?>
+					<tr>
+						<td><?php echo $make;?></td>
+						<td><?php echo $model;?></td>
+						<td><?php echo $year;?></td>
+						<td><?php echo $odom;?></td>
+						<td><?php echo $fee;?></td>
+						<td><button type='submit' name='reserve' id='reserve' value='<?php echo $vin; ?>' > Reserve </button></td>
+						<input type='hidden' name='res-date' id='res-date' value='<?php echo $date; ?>'/>
+					</tr>
+					<?php }}else{?>
+						<tr>
+							<td>No available cars on this date.</td>
+						</tr>
+						<?php 
+						}?>
+					<tr>
+						<td><input type='submit' name='menu-back' id='menu-back' value='Back' /></td>
+					</tr>
+					
+				</table>
+			</div>
+			<?php
+				echo "
+				<style>
+				#profile-menu {
+					display: none;
+				}
+				#carsavailable-menu1 {
+					display: none;
+				}
+				#carsavailable-menu2 {
+					display: block;
+				}
+				table tr td{
+					width: 6em;
 				}
 				</style>";
 		}
@@ -175,6 +281,13 @@ if(isset($_POST['reserve'])){
 		?>
 		<div  id='carsonlocation-menu'>
 			<table>
+			<tr>
+				<td>Make: </td>
+				<td>Model: </td>
+				<td>Year: </td>
+				<td>Odometer: </td>
+				<td>Rental Fee: </td>
+			</tr>
 				<?php foreach($rows as $row){ 
 				$vin = $row['VIN'];
 				$make = $row['Make'];
@@ -184,7 +297,11 @@ if(isset($_POST['reserve'])){
 				$odom = $row['Odometer'];
 				?>
 				<tr>
-					<td>Make: <?php echo $make;?>, Model: <?php echo $model;?>, Year: <?php echo $year;?>, Odometer: <?php echo $odom;?>, Rental Fee: <?php echo $fee; ?></td>
+					<td><?php echo $make;?></td>
+					<td><?php echo $model;?></td>
+					<td><?php echo $year;?></td>
+					<td><?php echo $odom;?></td>
+					<td><?php echo $fee;?></td>
 					<td><button type='submit' name='reserve' id='reserve' value='<?php echo $vin; ?>' > Reserve </button></td>
 				</tr>
 				<?php } ?>
