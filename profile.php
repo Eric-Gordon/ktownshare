@@ -9,7 +9,10 @@
 	echo "
 	<style>
 	input[type=submit]{
-		width: 10em;
+		width: 9em;
+	}
+	table tr td {
+		width: 9em;
 	}
 	</style>";
 ?>
@@ -50,15 +53,13 @@ if(isset($_SESSION['Member_id'])){
 
 <?php
 if(isset($_POST['reserve'])){
-	$vinnum = $_POST['reserve'];
+	$vinnum = $_POST['vinnum'];
 	if(isset($_POST['res-date'])){
 		$resDate = $_POST['res-date'];
-		$_SESSION['Member_id'] = $vinnum . "^" . $resDate;
-		header("Location: reserve.php");
+		header("Location: reserve.php?vin=$vinnum&resdate=$resDate");
 		die();
 	}else{
-		$_SESSION['Member_id'] = $vinnum;
-		header("Location: reserve.php");
+		header("Location: reserve.php?vin=$vinnum");
 		die();
 	}
 }
@@ -99,7 +100,7 @@ if(isset($_POST['menu-back'])){
 					<table>
 						<tr>
 							<td><?php echo $row['Address']; ?></td>
-							<td><button type="submit" name="carsonlocation" id='carsonlocation' value="<?php echo $id; ?>" >  Cars  </button></td>
+							<td><button type="submit" name="carsonlocation" id='carsonlocation' value='<?php echo $id; ?>' >Cars</button></td>
 						</tr>
 						<?php } ?>
 						<tr>
@@ -136,8 +137,13 @@ if(isset($_POST['menu-back'])){
 						var dateCheck = document.getElementById('check-date');
 						calendar.addEventListener(
 							 'change',
-							 function() { dateCheck.value = calendar.value;
-							document.forms['Profile'].submit(); },
+							 function() { 
+								if((calendar.valueAsDate < new Date())){
+									alert ("Please don't go back in time.");
+								}
+									dateCheck.value = calendar.value;
+									document.forms['Profile'].submit();
+							},
 							 false
 						  );
 				</script>
@@ -190,8 +196,13 @@ if(isset($_POST['menu-back'])){
 						var dateCheck = document.getElementById('check-date');
 						calendar.addEventListener(
 							 'change',
-							 function() { dateCheck.value = calendar.value;
-							document.forms['Profile'].submit(); },
+							 function() { 
+								if(calendar.valueAsDate < new Date()){
+									alert ("Please don't go back in time.");
+								}
+									dateCheck.value = calendar.value;
+									document.forms['Profile'].submit();
+							},
 							 false
 						  );
 					</script>
@@ -223,7 +234,8 @@ if(isset($_POST['menu-back'])){
 						<td><?php echo $year;?></td>
 						<td><?php echo $odom;?></td>
 						<td><?php echo $fee;?></td>
-						<td><button type='submit' name='reserve' id='reserve' value='<?php echo $vin; ?>' > Reserve </button></td>
+						<td><input type='submit' name='reserve' id='reserve' value='Reserve' /></td>
+						<td><input type='hidden' name='vinnum' id='vinnum' value='<?php echo $vin; ?>' /></td>
 						<input type='hidden' name='res-date' id='res-date' value='<?php echo $date; ?>'/>
 					</tr>
 					<?php }}else{?>
@@ -249,9 +261,6 @@ if(isset($_POST['menu-back'])){
 				}
 				#carsavailable-menu2 {
 					display: block;
-				}
-				table tr td{
-					width: 6em;
 				}
 				</style>";
 		}
@@ -302,7 +311,8 @@ if(isset($_POST['menu-back'])){
 					<td><?php echo $year;?></td>
 					<td><?php echo $odom;?></td>
 					<td><?php echo $fee;?></td>
-					<td><button type='submit' name='reserve' id='reserve' value='<?php echo $vin; ?>' > Reserve </button></td>
+					<td><input type='submit' name='reserve' id='reserve' value='Reserve' /></td>
+					<td><input type='hidden' name='vinnum' id='vinnum' value='<?php echo $vin; ?>' /></td>
 				</tr>
 				<?php } ?>
 				<tr>
@@ -326,6 +336,87 @@ if(isset($_POST['menu-back'])){
 		}
 	}?>
 	
+	<?php
+	if(isset($_POST['reservations'])){
+		// include database connection
+		include_once 'config/connection.php'; 
+		//select locations
+		$query = "SELECT Reserve_num, Date, Code, Make, Model, Address, Length FROM reservations, cars, parking_locations WHERE Member_id=? AND reservations.VIN=cars.VIN AND parking_locations.Location_id=cars.Location_id";
+		//prepare statement
+		if($stmt = $con->prepare($query)){
+			$stmt->bind_Param("s", $myrow['Member_id']);
+			// Execute the query
+			$stmt->execute();
+			//resultset
+			$result = $stmt->get_result();
+			
+			$num = $result->num_rows;
+			
+			if($num>0){
+				//put results into an array
+				while($row = $result->fetch_array()){
+					$rows[] = $row;
+				}
+				?>
+					<table>
+						<tr>
+							<td>Date: </td>
+							<td>Length: </td>
+							<td>Reservation Number: </td>
+							<td>Address: </td>
+							<td>Make: </td>
+							<td>Model: </td>
+							<td>Code: </td>
+						</tr>
+						<?php
+						foreach($rows as $row){
+							$date=$row['Date'];
+							$len=$row['Length'];
+							$resnum=$row['Reserve_num'];
+							$code=$row['Code'];
+							$address=$row['Address'];
+							$make=$row['Make'];
+							$model=$row['Model'];
+							?>
+						<tr>
+							<td><?php echo $date; ?></td>
+							<td><?php echo $len; ?></td>
+							<td><?php echo $resnum; ?></td>
+							<td><?php echo $address; ?></td>
+							<td><?php echo $make; ?></td>
+							<td><?php echo $model; ?></td>
+							<td><?php echo $code; ?></td>
+						</tr>
+						<?php } ?>
+						<tr>
+							<td><input type='submit' name='menu-back' id='menu-back' value='Back' /></td>
+						</tr>
+					</table>
+					
+					<?php
+
+				}else{
+					?>
+					<table>
+						<tr>
+							<td>You have no reservations at this time.</td>
+						</tr>
+						<tr>
+							<td><input type='submit' name='menu-back' id='menu-back' value='Back' /></td>
+						</tr>
+					</table>
+					<?php
+			}
+		}
+		echo "
+						<style>
+						#profile-menu {
+							display: none;
+						}
+						</style>";
+	}	
+	?>
+	
 	<?php // menu ?>
 	<div id='profile-menu'>
 		<table>
@@ -338,6 +429,7 @@ if(isset($_POST['menu-back'])){
 				<td><input type='submit' name='dropoff' id='dropoff' value='Drop Off' /></td>
 			</tr>
 			<tr>
+				<td><input type='submit' name='reservations' id='reservations' value='Reservations' /></td>
 				<td><input type='submit' name='history' id='history' value='Rental History' /></td>
 			</tr>
 		</table>
