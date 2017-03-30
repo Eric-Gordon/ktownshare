@@ -63,6 +63,7 @@ if(isset($_POST['reserve'])){
 	$vin = $_POST['vin'];
 	$date = $_POST['date'];
 	$length = $_POST['len'];
+	$endDate = date("Y-m-d", strtotime("$date +$length day"));
 	$x = 8; // Amount of digits
 	$min = pow(10,$x);
 	$max = (pow(10,$x+1)-1);
@@ -76,10 +77,10 @@ if(isset($_POST['reserve'])){
     include_once 'config/connection.php'; 
 	
 	// SELECT query
-        $query = "INSERT INTO reservations (Reserve_num, Member_id, VIN, Date, Code, Length) VALUES (?, ?, ?, ?, ?, ?)";
+        $query = "INSERT INTO reservations (Reserve_num, Member_id, VIN, Date, Code, EndDate) VALUES (?, ?, ?, ?, ?, ?)";
 		// prepare query for execution
 		$stmt = $con->prepare($query);
-		$stmt->bind_Param("ssssss", $reserveNum, $myrow['Member_id'], $vin, $date, $code, $length);
+		$stmt->bind_Param("ssssss", $reserveNum, $myrow['Member_id'], $vin, $date, $code, $endDate);
         // Execute the query
 		$stmt->execute();
 		
@@ -99,40 +100,63 @@ Welcome  <?php echo $myrow['Name']; ?>, <a href="index.php?logout=1"> Log Out</a
 				// include database connection
 				include_once 'config/connection.php'; 
 				//select locations
-				$query = "SELECT * FROM cars WHERE VIN NOT IN (SELECT VIN FROM reservations WHERE reservations.Date=?) AND VIN=?";
+				$query = "SELECT * FROM cars WHERE VIN NOT IN (SELECT VIN FROM reservations WHERE Date=? OR EndDate>=?) AND VIN=? AND isAvailable=1";;
 				//prepare statement
 				if($stmt = $con->prepare($query)){
-					$stmt->bind_Param("ss", $date, $vin);
+					$stmt->bind_Param("sss", $date, $date, $vin);
 					// Execute the query
 					$stmt->execute();
 					//resultset
 					$result = $stmt->get_result();
-					
 					$num = $result->num_rows;
-				
+					
+					//Get max reservation days
+					$query2 = "SELECT Date FROM cars, reservations WHERE cars.VIN=reservations.VIN AND cars.VIN=? AND isAvailable=1 AND Date>?";
+					// prepare query for execution
+					$stmt2 = $con->prepare($query2);
+					// bind the parameters. This is the best way to prevent SQL injection hacks.
+					$stmt2->bind_Param("ss", $vin, $date);
+					// Execute the query
+					$stmt2->execute();
+					// results 
+					$result2 = $stmt2->get_result();
+					$num2 = $result2->num_rows;
+					$diff=0;
+					if($num2>0){
+						$myrow = $result->fetch_assoc();
+						$date2 = $myrow['Date'];
+						$datetime1 = new DateTime($date);
+						$datetime2 = new DateTime($date2);
+						$diff = $datetime1->diff($datetime2);
+					}else{
+						$date2=date("Y-m-d", strtotime("$date +5 day"));
+						$datetime1 = new DateTime($date);
+						$datetime2 = new DateTime($date2);
+						$diff = $datetime2->diff($datetime1);
+					}
+					$diff=$diff->d;
 					?>
 					<div  id='carsavailable-menu2'>
 						<table>
 							<tr>
 								<td>Select Date: </td>
-								<td><input type='date' name='calendar2' id='calendar2' min='<?php echo date("Y/m/d"); ?>'/></td>
+								<td><input type='date' name='calendar2' id='calendar2' min='<?php echo date("Y/m/d"); ?>' value='<?php echo $date; ?>'/></td>
 							</tr>	
 							<tr>
 								<td><input type='hidden' name='check-date' id='check-date' value='' /></td>
 							</tr>
 							<script>
 								var calendar = document.getElementById('calendar2');
-								var time = <?php echo json_encode ( $date ) ?>;
-								calendar.value = time;
 								var dateCheck = document.getElementById('check-date');
 								calendar.addEventListener(
 									 'change',
 									 function() { 
 										if(calendar.valueAsDate < new Date()){
 											alert ("Please don't go back in time.");
-										}
+										}else{
 											dateCheck.value = calendar.value;
 											document.forms['Reserve'].submit();
+										}
 									 },
 									 false
 								  );
@@ -168,7 +192,7 @@ Welcome  <?php echo $myrow['Name']; ?>, <a href="index.php?logout=1"> Log Out</a
 							</tr>
 							<tr>
 								<td>Length of reservation(days)</td>
-								<td><input type='number' name='len' id='len' value='1' min='1' max='5' /></td>
+								<td><input type='number' name='len' id='len' value='1' min='1' max='<?php echo $diff; ?>' /></td>
 							</tr>
 							<tr>
 								<td><input type='submit' name ='cancel' id='cancel' value='Cancel' /></td>
@@ -213,16 +237,53 @@ Welcome  <?php echo $myrow['Name']; ?>, <a href="index.php?logout=1"> Log Out</a
 				// include database connection
 				include_once 'config/connection.php'; 
 				// SELECT query
-				$query = "SELECT * FROM cars WHERE VIN=?";
+				$query = "SELECT cars.VIN, Make, Model, Year, Odometer, Rent_fee, Date FROM cars, reservations WHERE cars.VIN=? AND isAvailable=1 AND Date>?";
 				// prepare query for execution
 				$stmt = $con->prepare($query);
 				// bind the parameters. This is the best way to prevent SQL injection hacks.
-				$stmt->bind_Param("s", $vin);
+				$stmt->bind_Param("ss", $vin, $date);
 				// Execute the query
 				$stmt->execute();
 			 	// results 
 				$result = $stmt->get_result();
-				$myrow = $result->fetch_assoc();
+				$num = $result->num_rows;
+				$diff=0;
+				if($num>0){
+					$myrow = $result->fetch_assoc();
+					$vin = $myrow['VIN'];
+					$make = $myrow['Make'];
+					$model = $myrow['Model'];
+					$year = $myrow['Year'];
+					$fee =  $myrow['Rent_fee'];
+					$odom = $myrow['Odometer'];
+					$date2 = $myrow['Date'];
+					$datetime1 = new DateTime($date);
+					$datetime2 = new DateTime($date2);
+					$diff = $datetime1->diff($datetime2);
+				}else{
+					// SELECT query
+					$query = "SELECT cars.VIN, Make, Model, Year, Odometer, Rent_fee FROM cars WHERE cars.VIN=? AND isAvailable=1";
+					// prepare query for execution
+					$stmt = $con->prepare($query);
+					// bind the parameters. This is the best way to prevent SQL injection hacks.
+					$stmt->bind_Param("s", $vin);
+					// Execute the query
+					$stmt->execute();
+					// results 
+					$result = $stmt->get_result();
+					$myrow = $result->fetch_assoc();
+					$vin = $myrow['VIN'];
+					$make = $myrow['Make'];
+					$model = $myrow['Model'];
+					$year = $myrow['Year'];
+					$fee =  $myrow['Rent_fee'];
+					$odom = $myrow['Odometer'];
+					$date2=date("Y-m-d", strtotime("$date +5 day"));
+					$datetime1 = new DateTime($date);
+					$datetime2 = new DateTime($date2);
+					$diff = $datetime1->diff($datetime2);
+				}
+				$diff=$diff->d;
 				?>
 				<table>
 					<tr>
@@ -249,7 +310,7 @@ Welcome  <?php echo $myrow['Name']; ?>, <a href="index.php?logout=1"> Log Out</a
 					</tr>
 					<tr>
 						<td>Length of reservation(days)</td>
-						<td><input type='number' name='len' id='len' value='1' min='1' max='5' /></td>
+						<td><input type='number' name='len' id='len' value='1' min='1' max='<?php echo $diff; ?>' /></td>
 					</tr>
 					<tr>
 						<td><input type='submit' name ='cancel' id='cancel' value='Cancel' /></td>
@@ -283,9 +344,10 @@ Welcome  <?php echo $myrow['Name']; ?>, <a href="index.php?logout=1"> Log Out</a
 									 function() { 
 										if(calendar.valueAsDate < new Date()){
 											alert ("Please don't go back in time.");
-										}
+										}else{
 											dateCheck.value = calendar.value;
 											document.forms['Reserve'].submit();
+										}
 									 },
 									 false
 								  );

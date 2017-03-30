@@ -12,7 +12,7 @@
 		width: 9em;
 	}
 	table tr td {
-		width: 9em;
+		width: 8em;
 	}
 	</style>";
 ?>
@@ -53,7 +53,7 @@ if(isset($_SESSION['Member_id'])){
 
 <?php
 if(isset($_POST['reserve'])){
-	$vinnum = $_POST['vinnum'];
+	$vinnum = $_POST['reserve'];
 	if(isset($_POST['res-date'])){
 		$resDate = $_POST['res-date'];
 		header("Location: reserve.php?vin=$vinnum&resdate=$resDate");
@@ -140,9 +140,10 @@ if(isset($_POST['menu-back'])){
 							 function() { 
 								if((calendar.valueAsDate < new Date())){
 									alert ("Please don't go back in time.");
-								}
+								}else{
 									dateCheck.value = calendar.value;
 									document.forms['Profile'].submit();
+								}
 							},
 							 false
 						  );
@@ -164,14 +165,15 @@ if(isset($_POST['menu-back'])){
 	
 	<?php
 	if(isset($_POST['check-date'])){
-		$date = $_POST['check-date'];		
+		$date = $_POST['check-date'];
+		
 		// include database connection
 		include_once 'config/connection.php'; 
 		//select locations
-		$query = "SELECT * FROM cars WHERE VIN NOT IN (SELECT VIN FROM reservations WHERE reservations.Date=?)";
+		$query = "SELECT VIN, Make, Model, Odometer, Rent_fee, Year, Address  FROM cars, parking_locations WHERE VIN NOT IN (SELECT VIN FROM reservations WHERE Date<=? AND EndDate>=?) AND cars.Location_id=parking_locations.Location_id AND isAvailable=1";
 		//prepare statement
 		if($stmt = $con->prepare($query)){
-			$stmt->bind_Param("s", $date);
+			$stmt->bind_Param("ss", $date, $date);
 			// Execute the query
 			$stmt->execute();
 			//resultset
@@ -214,6 +216,7 @@ if(isset($_POST['menu-back'])){
 						<td>Year: </td>
 						<td>Odometer: </td>
 						<td>Rental Fee: </td>
+						<td>Address</td>
 					</tr>
 					<?php
 						//put results into an array
@@ -227,6 +230,7 @@ if(isset($_POST['menu-back'])){
 							$year = $row['Year'];
 							$fee =  $row['Rent_fee'];
 							$odom = $row['Odometer'];
+							$address=$row['Address'];
 					?>
 					<tr>
 						<td><?php echo $make;?></td>
@@ -234,8 +238,8 @@ if(isset($_POST['menu-back'])){
 						<td><?php echo $year;?></td>
 						<td><?php echo $odom;?></td>
 						<td><?php echo $fee;?></td>
-						<td><input type='submit' name='reserve' id='reserve' value='Reserve' /></td>
-						<td><input type='hidden' name='vinnum' id='vinnum' value='<?php echo $vin; ?>' /></td>
+						<td><?php echo $address;?></td>
+						<td><button type='submit' name='reserve' id='reserve' value='<?php echo $vin; ?>' >Reserve</button></td>
 						<input type='hidden' name='res-date' id='res-date' value='<?php echo $date; ?>'/>
 					</tr>
 					<?php }}else{?>
@@ -272,7 +276,7 @@ if(isset($_POST['menu-back'])){
 	if(isset($_POST['carsonlocation'])) {
 		$loc_id = $_POST['carsonlocation'];
 		include_once 'config/connection.php'; 
-		$query = "SELECT VIN, Make, Model, Year, Rent_fee, Odometer FROM cars WHERE Location_id = ?";
+		$query = "SELECT DISTINCT VIN, Make, Model, Year, Rent_fee, Odometer, Address FROM cars, parking_locations WHERE parking_locations.Location_id=? AND isAvailable=1";
 		$stmt = $con->prepare($query);
 			$stmt->bind_Param("s", $loc_id);
 			//Execute the query
@@ -296,6 +300,7 @@ if(isset($_POST['menu-back'])){
 				<td>Year: </td>
 				<td>Odometer: </td>
 				<td>Rental Fee: </td>
+				<td>Address: </td>
 			</tr>
 				<?php foreach($rows as $row){ 
 				$vin = $row['VIN'];
@@ -304,6 +309,7 @@ if(isset($_POST['menu-back'])){
 				$year = $row['Year'];
 				$fee =  $row['Rent_fee'];
 				$odom = $row['Odometer'];
+				$address=$row['Address'];
 				?>
 				<tr>
 					<td><?php echo $make;?></td>
@@ -311,8 +317,8 @@ if(isset($_POST['menu-back'])){
 					<td><?php echo $year;?></td>
 					<td><?php echo $odom;?></td>
 					<td><?php echo $fee;?></td>
-					<td><input type='submit' name='reserve' id='reserve' value='Reserve' /></td>
-					<td><input type='hidden' name='vinnum' id='vinnum' value='<?php echo $vin; ?>' /></td>
+					<td><?php echo $address;?></td>
+					<td><button type='submit' name='reserve' id='reserve' value='<?php echo $vin; ?>' >Reserve</button></td>
 				</tr>
 				<?php } ?>
 				<tr>
@@ -341,7 +347,7 @@ if(isset($_POST['menu-back'])){
 		// include database connection
 		include_once 'config/connection.php'; 
 		//select locations
-		$query = "SELECT Reserve_num, Date, Code, Make, Model, Address, Length FROM reservations, cars, parking_locations WHERE Member_id=? AND reservations.VIN=cars.VIN AND parking_locations.Location_id=cars.Location_id";
+		$query = "SELECT Reserve_num, Date, Code, Make, Model, Address, EndDate FROM reservations, cars, parking_locations WHERE Member_id=? AND reservations.VIN=cars.VIN AND parking_locations.Location_id=cars.Location_id AND isAvailable=1";
 		//prepare statement
 		if($stmt = $con->prepare($query)){
 			$stmt->bind_Param("s", $myrow['Member_id']);
@@ -361,7 +367,7 @@ if(isset($_POST['menu-back'])){
 					<table>
 						<tr>
 							<td>Date: </td>
-							<td>Length: </td>
+							<td>End Date: </td>
 							<td>Reservation Number: </td>
 							<td>Address: </td>
 							<td>Make: </td>
@@ -371,7 +377,7 @@ if(isset($_POST['menu-back'])){
 						<?php
 						foreach($rows as $row){
 							$date=$row['Date'];
-							$len=$row['Length'];
+							$len=$row['EndDate'];
 							$resnum=$row['Reserve_num'];
 							$code=$row['Code'];
 							$address=$row['Address'];
